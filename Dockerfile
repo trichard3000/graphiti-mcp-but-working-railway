@@ -9,12 +9,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv using the installer script
+# Install uv using the installer script (to /usr/local/bin so it is accessible by the non-root user)
+ENV UV_INSTALL_DIR="/usr/local/bin"
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
-
-# Add uv to PATH
-ENV PATH="/root/.local/bin:${PATH}"
 
 # Configure uv for optimal Docker usage
 ENV UV_COMPILE_BYTECODE=1 \
@@ -30,8 +28,7 @@ RUN groupadd -r app && useradd -r -d /app -g app app
 COPY pyproject.toml ./
 
 # Generate lockfile and install dependencies
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv lock --upgrade && \
+RUN uv lock --upgrade && \
     uv sync --no-dev
 
 # Copy application code
