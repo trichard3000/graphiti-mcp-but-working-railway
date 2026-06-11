@@ -26,6 +26,7 @@ class GraphitiLLMConfig(BaseModel):
     model: str = DEFAULT_LLM_MODEL
     small_model: str = SMALL_LLM_MODEL
     temperature: float = 0.0
+    base_url: str | None = None   # NEW
 
     @classmethod
     def from_env(cls) -> 'GraphitiLLMConfig':
@@ -37,6 +38,10 @@ class GraphitiLLMConfig(BaseModel):
         # Get small_model from environment, or use default if not set or empty
         small_model_env = os.environ.get('SMALL_MODEL_NAME', '')
         small_model = small_model_env if small_model_env.strip() else SMALL_LLM_MODEL
+
+        # base_url support for custom OpenAI-compatible endpoints (e.g. Ollama)
+        base_url_env = os.environ.get('OPENAI_BASE_URL', '')
+        base_url = base_url_env.strip() if base_url_env.strip() else None
 
         # Log if empty model was provided
         if model_env == '':
@@ -53,6 +58,7 @@ class GraphitiLLMConfig(BaseModel):
             model=model,
             small_model=small_model,
             temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
+            base_url=base_url,   # NEW
         )
 
     @classmethod
@@ -85,6 +91,26 @@ class GraphitiLLMConfig(BaseModel):
         return config
 
     def create_client(self) -> LLMClient | None:
+        """Create an LLM client based on this configuration."""
+        if not self.api_key:
+            logger.warning('OPENAI_API_KEY not set, LLM client will not be available')
+            return None
+
+        from graphiti_core.llm_client.config import LLMConfig
+        from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
+
+        # Build the config with base_url for Ollama
+        llm_config = LLMConfig(
+            api_key=self.api_key,
+            model=self.model,
+            small_model=self.small_model,
+            base_url=os.getenv("OPENAI_BASE_URL"),   # ← This is where base_url goes
+            temperature=self.temperature if not any(x in self.model.lower() for x in ['o1', 'o3', 'gpt-5']) else None,
+        )
+
+        return OpenAIGenericClient(config=llm_config)
+
+    def create_client_OLD(self) -> LLMClient | None:
         """Create an LLM client based on this configuration.
 
         Returns:
@@ -96,7 +122,10 @@ class GraphitiLLMConfig(BaseModel):
             return None
 
         llm_client_config = LLMConfig(
-            api_key=self.api_key, model=self.model, small_model=self.small_model
+            api_key=self.api_key,
+            model=self.model,
+            small_model=self.small_model,
+            **({"base_url": self.base_url} if self.base_url else {})
         )
 
         # Only set temperature if not using gpt-5, o1, or o3 models (they don't support temperature)
