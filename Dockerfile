@@ -11,8 +11,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install uv using the installer script (to /usr/local/bin so it is accessible by the non-root user)
 ENV UV_INSTALL_DIR="/usr/local/bin"
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
+#ADD https://astral.sh/uv/install.sh /uv-installer.sh
+#RUN sh /uv-installer.sh && rm /uv-installer.sh
+ARG UV_INSTALLER_SHA256
+RUN curl -fsSL https://astral.sh/uv/install.sh -o /tmp/uv-installer.sh && \
+    echo "${UV_INSTALLER_SHA256}  /tmp/uv-installer.sh" | sha256sum -c - && \
+    sh /tmp/uv-installer.sh && \
+    rm /tmp/uv-installer.sh
 
 # Configure uv for optimal Docker usage
 ENV UV_COMPILE_BYTECODE=1 \
@@ -25,11 +30,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN groupadd -r app && useradd -r -d /app -g app app
 
 # Copy project file
-COPY pyproject.toml ./
+#COPY pyproject.toml ./
+# Copy dependency manifests
+COPY pyproject.toml uv.lock ./
 
 # Generate lockfile and install dependencies
-RUN uv lock --upgrade && \
-    uv sync --no-dev
+#RUN uv lock --upgrade && \
+#    uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY graphiti_mcp_server/ ./graphiti_mcp_server/
